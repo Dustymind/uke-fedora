@@ -1,7 +1,6 @@
 name: Build Baseline Bootable Image
 
 on:
-  push:
     branches: [main, fix/focus-keyboard]
   workflow_dispatch:
     inputs:
