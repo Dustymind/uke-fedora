@@ -1,6 +1,7 @@
 name: Build Baseline Bootable Image
 
 on:
+  push:
     branches: [main, fix/focus-keyboard]
   workflow_dispatch:
     inputs:
@@ -28,137 +29,81 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Ensure submodule legacy refs
-        run: |
-          git -C uke-linux-hardware-support fetch origin legacy-1.5.2:refs/tags/legacy-1.5.2 || true
-
       - name: Record component pins
-        id: pins
         run: |
-          {
-            echo "kernel=$(git -C senemos-uke-kernel rev-parse HEAD)"
-            echo "builder=$(git -C uke-fedora-builder rev-parse HEAD)"
-            echo "hardware=$(git -C uke-linux-hardware-support rev-parse HEAD)"
-          } >> "$GITHUB_OUTPUT"
+          git -C senemos-uke-kernel rev-parse HEAD > pins/kernel.txt
+          git -C uke-fedora-builder rev-parse HEAD > pins/builder.txt
 
       - name: Fetch upstream touch core
         run: |
-          bash uke-linux-hardware-support/uke-sensors/src/fetch-touch-core.sh
+          cd senemos-uke-kernel && git fetch upstream touch-core --tags 2>/dev/null || true
 
       - name: Restore build cache
-        uses: actions/cache/restore@v4
-        id: cache-restore
+        uses: actions/cache@v4
         with:
           path: |
-            senemos-uke-kernel/source-cache
-            uke-fedora-builder/build/cache
-            ~/.cache/ccache
-            ~/.cache/docker
-          key: uke-cache-v3-${{ steps.pins.outputs.kernel }}-${{ steps.pins.outputs.builder }}-${{ github.run_id }}
+            ~/.cache/bazel
+            ~/.cache/pip
+          key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
           restore-keys: |
-            uke-cache-v3-${{ steps.pins.outputs.kernel }}-${{ steps.pins.outputs.builder }}-
-            uke-cache-v3-
+            ${{ runner.os }}-build-
 
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo apt-get clean
-          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo docker system prune -af --volumes 2>/dev/null || true
+          df -h
 
       - name: Install host tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends jq zstd g++ python3 e2fsprogs curl ca-certificates
-          curl -fsSL 'https://android.googlesource.com/platform/external/avb/+/refs/heads/main/avbtool.py?format=TEXT' \
-            | base64 -d | sudo tee /usr/local/bin/avbtool >/dev/null
-          sudo chmod +x /usr/local/bin/avbtool
-          avbtool --help >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            abootimg android-tools-mkbootimg android-tools-fsutils \
+            bc bison ccache cpio device-tree-compiler flex \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            kmod libncurses5-dev libssl-dev lz4 lzop \
+            m4 python3-pyelftools python3-pytest python3-zstandard \
+            rpm2cpio rsync u-boot-tools unzip xz-utils zstd
 
       - name: Patch builder and configure build environment
         run: |
-          sed -i 's/\$count == 74/\$count == 75/' uke-fedora-builder/src/image/verify-oem-rpm.sh
-          sed -i 's/firmware_count == 74/firmware_count == 75/' uke-fedora-builder/src/image/audit-rootfs.sh
-          sed -i 's/if command -v podman >\/dev\/null; then container=podman/if [[ -n \${UKE_CONTAINER:-} ]]; then container=\$UKE_CONTAINER; elif command -v podman >\/dev\/null; then container=podman/' uke-fedora-builder/build-rootfs.sh
-          sed -i 's|/core-rpm/uke-core-meta\.rpm$|/core-rpm/uke-core-meta.rpm /hardware-rpms/uke-fedora*-oem-data-*.rpm|' uke-fedora-builder/build-rootfs.sh
-          sed -i 's|install -Dm644 "\$here/configs/images/uke-copr\.repo"|sudo &|' uke-fedora-builder/build-rootfs.sh
-          # Unify DRM KMS & GPU nodes (eliminate llvmpipe software rasterizer fallback)
-          sed -i 's/ msm\.separate_gpu_kms=1//' senemos-uke-kernel/packaging/native/native.config
-          sed -i 's/^options msm separate_gpu_kms=1/# options msm separate_gpu_kms=1/' uke-linux-hardware-support/uke-desktop-integration/src/modprobe.d/uke-gpu-options.conf
-          # Touchscreen firmware: deploy to kernel-expected firmware path
-          sed -i '/install -Dm600 "\/local-blobs\/touch\/\$variant\/\$name" "\$root\/var\/lib\/uke-touch\/\$variant\/\$name"/a \            install -Dm644 "/local-blobs/touch/$variant/$name" "$root/usr/lib/firmware/qcom/uke/touch/$variant/$name"' uke-fedora-builder/build-rootfs.sh
-          sed -i '/chmod 0700 "\$root\/var\/lib\/uke-touch\/\$variant"/a \        chmod 0755 "$root/usr/lib/firmware/qcom/uke/touch/$variant"' uke-fedora-builder/build-rootfs.sh
-          sed -i '/install -Dm600 \/local-blobs\/touch\/reference\.bin "\$root\/var\/lib\/uke-touch\/reference\.bin"/a \    install -Dm644 /local-blobs/touch/reference.bin "$root/usr/lib/firmware/qcom/uke/touch/reference.bin"' uke-fedora-builder/build-rootfs.sh
-          # Audio & Keyboard: install FourSemi FS19xx amplifier firmware, Nanosic MCU firmware, unmuted ALSA state, and WirePlumber speaker priority
-          sed -i '/if \[\[ \$copr == 1 \]\]; then/i \
-            sudo install -Dm644 "$here/../configs/audio/fs19xx.fsm" "$output/root/usr/lib/firmware/qcom/uke/audio/fs19xx.fsm"\
-            sudo install -Dm644 "$here/../configs/nanosic/MCU_Upgrade.bin" "$output/root/usr/lib/firmware/nanosic/MCU_Upgrade.bin"\
-            sudo install -Dm644 "$here/../configs/audio/asound.state" "$output/root/var/lib/alsa/asound.state"\
-            sudo install -Dm644 "$here/../configs/wireplumber/85-uke-speaker-priority.conf" "$output/root/usr/share/wireplumber/wireplumber.conf.d/85-uke-speaker-priority.conf"' uke-fedora-builder/build-rootfs.sh
-          # The sed above edits a pinned kernel build input (native.config), so the
-          # source digests must be refreshed after patching or check-pins fails.
-          bash senemos-uke-kernel/tools/refresh-source-pins.sh
-          mkdir -p uke-fedora-builder/build/cache
-          sudo chmod -R 777 uke-fedora-builder/build/cache ~/.cache 2>/dev/null || true
+          cd uke-fedora-builder
+          git apply ../senemos-uke-kernel/patches/builder/*.patch 2>/dev/null || true
 
       - name: Build baseline image
         env:
-          PROFILES: ${{ inputs.profiles || 'kde' }}
-          UKE_VIDEO_OVERLAY: '0'
-          UKE_CONTAINER: docker
-          UKE_COPR: '0'
+          PROFILES: ${{ github.event.inputs.profiles || 'tty' }}
         run: |
-          set -Eeuo pipefail
-          output="build/ci-$GITHUB_RUN_ID"
-          mkdir -p build
-          ./ukelinux.sh --profiles "$PROFILES" --parallel 1 --output "$output"
+          cd uke-fedora-builder
+          ./build-images.sh "${PROFILES}"
 
       - name: Save build cache
-        uses: actions/cache/save@v4
-        if: always()
+        uses: actions/cache@v4
         with:
           path: |
-            senemos-uke-kernel/source-cache
-            uke-fedora-builder/build/cache
-            ~/.cache/ccache
-            ~/.cache/docker
-          key: uke-cache-v3-${{ steps.pins.outputs.kernel }}-${{ steps.pins.outputs.builder }}-${{ github.run_id }}
+            ~/.cache/bazel
+            ~/.cache/pip
+          key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
 
       - name: Package release archives
         if: success()
         run: |
-          set -Eeuo pipefail
-          tag="ci-$GITHUB_RUN_ID"
-          ./uke-fedora-builder/tools/package-release.sh --tag "$tag" \
-            --output "build/release-$tag" build/ci-$GITHUB_RUN_ID/*-pair
+          cd uke-fedora-builder
+          ./package-artifacts.sh
 
       - name: Upload bootable image artifacts
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: uke-bootable-images-${{ github.run_id }}
-          path: |
-            build/ci-*/*-pair/fedora_boot.img
-            build/ci-*/*-pair/userdata.img
-            build/ci-*/*-pair/SHA256SUMS
-            build/ci-*/status.json
-            build/ci-*/build.log
-            build/ci-*/kernel-rpms/*.rpm
-            build/release-*/*.tar.zst
-            build/release-*/SHA256SUMS
-          if-no-files-found: warn
-          compression-level: 0
-          retention-days: 14
+          name: fedora-boot-${{ github.run_id }}
+          path: uke-fedora-builder/out/*.img
+          retention-days: 30
 
       - name: Build Summary
         if: always()
         run: |
-          {
-            echo "## Uke Baseline Image Build"
-            echo "- Profiles: \`${{ inputs.profiles || 'tty' }}\`"
-            echo "- Result: \`${{ job.status }}\`"
-            if compgen -G 'build/release-*' >/dev/null; then
-              echo '```'
-              cat build/release-*/SHA256SUMS 2>/dev/null || true
-              echo '```'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Profiles: ${{ github.event.inputs.profiles || 'tty' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Run: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+
