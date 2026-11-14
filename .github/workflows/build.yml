@@ -59,12 +59,49 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-          wget -q https://github.com/osm0sis/mkbootimg/releases/download/v20240626/mkbootimg -O /usr/local/bin/mkbootimg && chmod +x /usr/local/bin/mkbootimg
-          wget -q https://github.com/osm0sis/mkbootimg/releases/download/v20240626/unpack_bootimg -O /usr/local/bin/unpack_bootimg && chmod +x /usr/local/bin/unpack_bootimg
-            abootimg \
             bc bison ccache cpio device-tree-compiler flex \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             kmod libncurses5-dev libssl-dev lz4 lzop \
+            m4 python3-pyelftools python3-pytest python3-zstandard \
+            rpm2cpio rsync u-boot-tools unzip xz-utils zstd
+
+      - name: Install mkbootimg and abootimg from source
+        run: |
+          # Install mkbootimg from osm0sis releases
+          cd /tmp
+          wget -q https://github.com/osm0sis/mkbootimg/releases/download/v20240626/mkbootimg -O mkbootimg
+          chmod +x mkbootimg
+          sudo mv mkbootimg /usr/local/bin/
+          wget -q https://github.com/osm0sis/mkbootimg/releases/download/v20240626/unpack_bootimg -O unpack_bootimg
+          chmod +x unpack_bootimg
+          sudo mv unpack_bootimg /usr/local/bin/
+          # Build abootimg from source
+          git clone https://github.com/ntnem/abootimg.git /tmp/abootimg
+          cd /tmp/abootimg
+          make -j$(nproc)
+          sudo cp abootimg /usr/local/bin/
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/pip
+          key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo docker system prune -af --volumes 2>/dev/null || true
+          df -h
+
+      - name: Install host tools (remaining)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libncurses5-dev libssl-dev lz4 lzop \
             m4 python3-pyelftools python3-pytest python3-zstandard \
             rpm2cpio rsync u-boot-tools unzip xz-utils zstd
 
