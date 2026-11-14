@@ -31,8 +31,9 @@ jobs:
 
       - name: Record component pins
         run: |
-          mkdir -p pins git -C senemos-uke-kernel rev-parse HEAD > pins/kernel.txtgit -C senemos-uke-kernel rev-parse HEAD > pins/kernel.txt git -C senemos-uke-kernel rev-parse HEAD > pins/kernel.txt
-          mkdir -p pins git -C uke-fedora-builder rev-parse HEAD > pins/builder.txtgit -C uke-fedora-builder rev-parse HEAD > pins/builder.txt git -C uke-fedora-builder rev-parse HEAD > pins/builder.txt
+          mkdir -p pins
+          git -C senemos-uke-kernel rev-parse HEAD > pins/kernel.txt
+          git -C uke-fedora-builder rev-parse HEAD > pins/builder.txt
 
       - name: Fetch upstream touch core
         run: |
@@ -84,6 +85,8 @@ jobs:
             ~/.cache/bazel
             ~/.cache/pip
           key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
 
       - name: Package release archives
         if: success()
