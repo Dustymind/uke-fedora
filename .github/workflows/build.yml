@@ -55,7 +55,7 @@ jobs:
           sudo docker system prune -af --volumes 2>/dev/null || true
           df -h
 
-      - name: Install host tools
+      - name: Install host tools (base)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -63,41 +63,27 @@ jobs:
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             kmod libncurses5-dev libssl-dev lz4 lzop \
             m4 python3-pyelftools python3-pytest python3-zstandard \
-            rpm2cpio rsync u-boot-tools unzip xz-utils zstd
+            rpm2cpio rsync u-boot-tools unzip xz-utils zstd \
+            git build-essential
 
-      - name: Install mkbootimg and abootimg from source
+      - name: Build mkbootimg and unpack_bootimg from source
         run: |
-          # Install mkbootimg from osm0sis releases
           cd /tmp
-          wget -q https://github.com/osm0sis/mkbootimg/releases/download/v20240626/mkbootimg -O mkbootimg
-          chmod +x mkbootimg
-          sudo mv mkbootimg /usr/local/bin/
-          wget -q https://github.com/osm0sis/mkbootimg/releases/download/v20240626/unpack_bootimg -O unpack_bootimg
-          chmod +x unpack_bootimg
-          sudo mv unpack_bootimg /usr/local/bin/
-          # Build abootimg from source
-          git clone https://github.com/ntnem/abootimg.git /tmp/abootimg
-          cd /tmp/abootimg
+          git clone --depth 1 --branch 2022.11.09 https://github.com/osm0sis/mkbootimg.git
+          cd mkbootimg
+          make -j$(nproc)
+          sudo cp mkbootimg /usr/local/bin/
+          sudo cp unpack_bootimg /usr/local/bin/
+
+      - name: Build abootimg from source
+        run: |
+          cd /tmp
+          git clone --depth 1 https://github.com/ntnem/abootimg.git
+          cd abootimg
           make -j$(nproc)
           sudo cp abootimg /usr/local/bin/
 
-      - name: Restore build cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/pip
-          key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true
-          sudo docker system prune -af --volumes 2>/dev/null || true
-          df -h
-
-      - name: Install host tools (remaining)
+      - name: Install remaining host tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
