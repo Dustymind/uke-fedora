@@ -39,23 +39,13 @@ jobs:
         run: |
           cd senemos-uke-kernel && git fetch upstream touch-core --tags 2>/dev/null || true
 
-      - name: Restore build cache
-        uses: actions.cache@v4
-        with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/pip
-          key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
-
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true
           sudo docker system prune -af --volumes 2>/dev/null || true
           df -h
 
-      - name: Install host tools (base)
+      - name: Install all host tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -66,7 +56,7 @@ jobs:
             rpm2cpio rsync u-boot-tools unzip xz-utils zstd \
             git build-essential libblkid-dev
 
-      - name: Build mkbootimg and unpack_bootimg from source
+      - name: Build mkbootimg and unpack_bootimg
         run: |
           cd /tmp
           git clone --depth 1 --branch 2022.11.09 https://github.com/osm0sis/mkbootimg.git
@@ -77,7 +67,7 @@ jobs:
           find . -name "unpackbootimg" -type f -exec sudo cp {} /usr/local/bin/unpack_bootimg \;
           sudo cp mkbootimg /usr/local/bin/
 
-      - name: Build abootimg from source
+      - name: Build abootimg
         run: |
           cd /tmp
           git clone --depth 1 https://github.com/ggrandou/abootimg.git
@@ -85,15 +75,7 @@ jobs:
           make -j$(nproc)
           sudo cp abootimg /usr/local/bin/
 
-      - name: Install remaining host tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            libncurses5-dev libssl-dev lz4 lzop \
-            m4 python3-pyelftools python3-pytest python3-zstandard \
-            rpm2cpio rsync u-boot-tools unzip xz-utils zstd
-
-      - name: Patch builder and configure build environment
+      - name: Patch builder
         run: |
           cd uke-fedora-builder
           git apply ../senemos-uke-kernel/patches/builder/*.patch 2>/dev/null || true
@@ -104,16 +86,6 @@ jobs:
         run: |
           cd uke-fedora-builder
           ./build-images.sh --profiles "${PROFILES}"
-
-      - name: Save build cache
-        uses: actions.cache@v4
-        with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/pip
-          key: ${{ runner.os }}-build-${{ hashFiles('**/lockfiles/**') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
 
       - name: Package release archives
         if: success()
