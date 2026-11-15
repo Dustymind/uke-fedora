@@ -64,7 +64,7 @@ jobs:
             kmod libncurses5-dev libssl-dev lz4 lzop \
             m4 python3-pyelftools python3-pytest python3-zstandard \
             rpm2cpio rsync u-boot-tools unzip xz-utils zstd \
-            git build-essential
+            git build-essential libblkid-dev
 
       - name: Build mkbootimg and unpack_bootimg from source
         run: |
