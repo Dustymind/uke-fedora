@@ -82,7 +82,7 @@ jobs:
       - name: Build abootimg from source
         run: |
           cd /tmp
-          git clone --depth 1 https://github.com/ntnem/abootimg.git
+          git clone --depth 1 https://github.com/ggrandou/abootimg.git
           cd abootimg
           make -j$(nproc)
           sudo cp abootimg /usr/local/bin/
@@ -108,7 +108,7 @@ jobs:
           ./build-images.sh "${PROFILES}"
 
       - name: Save build cache
-        uses: actions/cache@v4
+        uses: actions.cache@v4
         with:
           path: |
             ~/.cache/bazel
