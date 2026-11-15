@@ -63,6 +63,7 @@ jobs:
           cd avb
           python3 -m pip install --user -r requirements.txt 2>/dev/null || true
           python3 -c "import cryptography" 2>/dev/null || python3 -m pip install --user cryptography
+          python3 -m pip install --user pyasn1
           python3 build_avbtool.py
           sudo cp avbtool /usr/local/bin/
 
