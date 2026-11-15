@@ -71,7 +71,8 @@ jobs:
           cd /tmp
           git clone --depth 1 --branch 2022.11.09 https://github.com/osm0sis/mkbootimg.git
           cd mkbootimg
-          # Remove -Werror from libmincrypt Makefile
+          # Remove -Werror from both Makefiles
+          sed -i 's/-Werror//g' Makefile
           sed -i 's/-Werror//g' libmincrypt/Makefile
           make CFLAGS="-ffunction-sections -O3" -j$(nproc)
           sudo cp mkbootimg /usr/local/bin/
