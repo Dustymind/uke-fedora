@@ -54,7 +54,15 @@ jobs:
             kmod libncurses5-dev libssl-dev lz4 lzop \
             m4 python3-pyelftools python3-pytest python3-zstandard \
             rpm2cpio rsync u-boot-tools unzip xz-utils zstd \
-            git build-essential libblkid-dev
+            git build-essential libblkid-dev android-sdk-libsparse-utils
+
+      - name: Install avbtool
+        run: |
+          cd /tmp
+          git clone --depth 1 https://android.googlesource.com/platform/external/avb
+          cd avb
+          python3 -m pip install --user -r requirements.txt
+          sudo cp avbtool /usr/local/bin/
 
       - name: Build mkbootimg and unpack_bootimg
         run: |
