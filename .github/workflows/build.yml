@@ -71,11 +71,9 @@ jobs:
           cd /tmp
           git clone --depth 1 --branch 2022.11.09 https://github.com/osm0sis/mkbootimg.git
           cd mkbootimg
-          # Remove -Werror from both Makefiles
           sed -i 's/-Werror//g' Makefile
           sed -i 's/-Werror//g' libmincrypt/Makefile
           make CFLAGS="-ffunction-sections -O3" -j$(nproc)
-          # Find and copy unpack_bootimg (built as unpackbootimg in libmincrypt/)
           find . -name "unpackbootimg" -type f -exec sudo cp {} /usr/local/bin/unpack_bootimg \;
           sudo cp mkbootimg /usr/local/bin/
 
@@ -108,7 +106,7 @@ jobs:
           ./build-images.sh "${PROFILES}"
 
       - name: Save build cache
-        uses: actions.cache@v4
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/bazel
@@ -138,4 +136,3 @@ jobs:
           echo "- Profiles: ${{ github.event.inputs.profiles || 'tty' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Run: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-
