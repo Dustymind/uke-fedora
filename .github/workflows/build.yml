@@ -40,7 +40,7 @@ jobs:
           cd senemos-uke-kernel && git fetch upstream touch-core --tags 2>/dev/null || true
 
       - name: Restore build cache
-        uses: actions/cache@v4
+        uses: actions.cache@v4
         with:
           path: |
             ~/.cache/bazel
@@ -103,10 +103,10 @@ jobs:
           PROFILES: ${{ github.event.inputs.profiles || 'tty' }}
         run: |
           cd uke-fedora-builder
-          ./build-images.sh "${PROFILES}"
+          ./build-images.sh --profiles "${PROFILES}"
 
       - name: Save build cache
-        uses: actions/cache@v4
+        uses: actions.cache@v4
         with:
           path: |
             ~/.cache/bazel
