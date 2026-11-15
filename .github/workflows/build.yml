@@ -75,10 +75,9 @@ jobs:
           sed -i 's/-Werror//g' Makefile
           sed -i 's/-Werror//g' libmincrypt/Makefile
           make CFLAGS="-ffunction-sections -O3" -j$(nproc)
-          # Build unpack_bootimg from libmincrypt (binary is unpackbootimg in libmincrypt dir)
-          make -C libmincrypt CFLAGS="-ffunction-sections -O3"
+          # Find and copy unpack_bootimg (built as unpackbootimg in libmincrypt/)
+          find . -name "unpackbootimg" -type f -exec sudo cp {} /usr/local/bin/unpack_bootimg \;
           sudo cp mkbootimg /usr/local/bin/
-          sudo cp libmincrypt/unpackbootimg /usr/local/bin/unpack_bootimg
 
       - name: Build abootimg from source
         run: |
